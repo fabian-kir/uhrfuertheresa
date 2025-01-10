@@ -1,7 +1,10 @@
 #include <FastLED.h>
 #include <RtcDS1302.h>
 #include <EEPROM.h>
+#include <math.h>
 using namespace std;
+
+void(* resetFunc) (void) = 0;//declare reset function at address 0
 
 #define SHOW_TIME 0
 #define SET_COLOR 1
@@ -136,18 +139,19 @@ void setupRtc() {
     rtc.SetIsRunning(true);
   }
 
-  /*
+
   RtcDateTime timeToSet = RtcDateTime(
-    2024,
-    12,
-    27,
-    12,
-    36,
-    0
+    2025,
+    1,
+    10,
+    19,
+    23,
+    10
   );
 
   rtc.SetDateTime(timeToSet);
-  */
+
+
 }
 
 // SETUP BUTTONS:
@@ -396,19 +400,17 @@ void lightTilesForTime(uint8_t minutes, uint8_t hours) {
   }
 }
 
-void changeBrightnessFromTime(uint8_t minutes, uint8_t hours) {
-  if (hours > 22) {
-    FastLED.setBrightness(userSetBrightness / 5);
-  } else if (hours >= 23 || hours <= 6) {
-    FastLED.setBrightness(userSetBrightness / 10);
+void dimLed() {
+  FastLED.setBrightness(6);
+  FastLED.show();
+  FastLED.clear(true);
+  for(int i = 0; i<6; i++) {
+    FastLED.clear();
   }
 }
 
-
 void loop() {
   RtcDateTime now = rtc.GetDateTime();
-
-  changeBrightnessFromTime(now.Minute(), now.Hour());
 
   if (wasChangeStateButtonReleased()) {
     globalClockState = (globalClockState + 1) % 6;
@@ -420,12 +422,20 @@ void loop() {
 
   switch (globalClockState) {
     case SHOW_TIME:
-      lightTilesForTime(now.Minute(), now.Hour());
-      
+      lightTilesForTime(now.Minute(), now.Hour());      
+
+      if (now.Hour() >= 22 || now.Hour() < 7) {
+        dimLed();
+      } else {
+        FastLED.setBrightness(userSetBrightness);
+        delay(2000);
+      }
       break;
       
     case SET_COLOR:
       if (actionOccured) {
+        leds[1] = CRGB::Black; // For some really fckn weird reason the clock does not start blinking at 19:22:15 when this line of code is added wtf... wtf... this is the weirdst bug I've ever faced in all my life.
+
         paletteIndex = (paletteIndex + 1) % NUM_COLORS;
 
         writeToEEPROM();
@@ -534,8 +544,6 @@ void loop() {
 
       // Solve this by somehow making the Arduino rely on its own time whenever we end up here.   
       break;
-
-    delay(500);
   }
 
   FastLED.show();
